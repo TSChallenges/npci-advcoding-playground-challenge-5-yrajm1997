@@ -1,66 +1,54 @@
-package com.example.api.controller;
+package com.hackerrank.api.controller;
 
-//public class FlightController {
-//}
-
-import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestBody;
+import com.hackerrank.api.model.Flight;
 
-import com.example.api.model.Flight;
-import com.example.api.repository.FlightRepository;
+import java.util.*;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.hackerrank.api.repository.FlightRepository;
 
 @RestController
 @RequestMapping("/flight")
 public class FlightController {
 
-    private final FlightRepository flightRepository;
-
-    public FlightController(FlightRepository flightRepository) {
-        this.flightRepository = flightRepository;
-    }
+    @Autowired
+    private FlightRepository flightRepository;
 
     @PostMapping
-    public ResponseEntity<Flight> createFlight(@RequestBody Flight flight) {
+    public ResponseEntity<Flight> addFlight(@RequestBody Flight flight) {
+      flight.setId(null);  
         Flight savedFlight = flightRepository.save(flight);
-        return new ResponseEntity<>(savedFlight, HttpStatus.CREATED);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedFlight);
     }
 
     @GetMapping
-    public ResponseEntity<List<Flight>> getFlights(
-            @RequestParam(value = "origin", required = false) String origin,
-            @RequestParam(value = "orderBy", required = false) String orderBy) {
-
-        List<Flight> flights;
+    public ResponseEntity<List<Flight>> getFlights(@RequestParam(required = false) String origin, @RequestParam(required = false) String orderBy) {
+        List<Flight> flights = flightRepository.findAll();
         if (origin != null) {
-            flights = flightRepository.findByOrigin(origin);
-        } else {
-            flights = flightRepository.findAll();
+            flights = flights.stream().filter(f -> f.getOrigin().equalsIgnoreCase(origin)).collect(Collectors.toList());
         }
-
-        if ("destination".equals(orderBy)) {
-            flights.sort((f1, f2) -> f1.getDestination().compareTo(f2.getDestination()));
-        } else if ("-destination".equals(orderBy)) {
-            flights.sort((f1, f2) -> f2.getDestination().compareTo(f1.getDestination()));
+        if (orderBy != null) {
+            if ("destination".equals(orderBy)) {
+                flights.sort(Comparator.comparing(Flight::getDestination).thenComparing(Flight::getId));
+            } else if ("-destination".equals(orderBy)) {
+                flights.sort(Comparator.comparing(Flight::getDestination).thenComparing(Flight::getId).reversed());
+            }
         }
-
-        return new ResponseEntity<>(flights, HttpStatus.OK);
+        return ResponseEntity.ok(flights);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Flight> getFlightById(@PathVariable Integer id) {
-        return flightRepository.findById(id)
-                .map(flight -> new ResponseEntity<>(flight, HttpStatus.OK))
-                .orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+        Optional<Flight> flight = flightRepository.findById(id);
+        return flight.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
-
 }
